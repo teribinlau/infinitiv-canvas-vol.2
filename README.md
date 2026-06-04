@@ -1,4 +1,14 @@
-# Infinite-Canvas
+# infinitiv-canvas vol.2
+
+> 本项目由 **[ilililab](https://www.ilililab.de)** 基于 **[hero8152/Infinite-Canvas](https://github.com/hero8152/Infinite-Canvas)** 二次开发。遵循原项目许可证：保持开源并注明原作者来源。
+>
+> **vol.2 新增功能**
+> - 提示词反推：英文关键词 / 中文自然语言 / Midjourney 命令 / 一句话总结 四种风格，支持一键「↻ 重推」
+> - 提示词节点参考图缩略图条：点击插入 `@图片N` 引导多图编辑
+> - 焦点编辑：在图片上点选区域，视觉模型识别该部位并回填到提示词
+> - 风格节点：19 种风格预设（Photoreal / Cinematic / Anime / Ghibli / … / Neon），可连接到生成器，自动把风格关键词追加到提示词末尾
+> - API 平台设置新增「反推提示词模型」独立配置
+
 Supports comfyui/API calls/modelscope calls
 
 详细教程：[https://youtu.be/1y9ShTvgC_w](https://youtu.be/r_y_9ALr7fg)
