@@ -314,6 +314,17 @@
                             <div id="videoModelList" class="model-list"></div>
                         </section>
 
+                        <section class="block">
+                            <div class="block-head">
+                                <div>
+                                    <div class="block-title" data-i18n="api.interrogateModels">反推提示词模型</div>
+                                    <div class="block-desc" data-i18n="api.interrogateHint">图片右键"提示词反推"使用，需要支持视觉输入的模型，如 gpt-4o-mini、qwen-vl-max-latest、glm-4v 等。列表第一个即默认。</div>
+                                </div>
+                                <button class="ghost-btn" type="button" onclick="addModel('interrogate')"><i data-lucide="plus" class="w-3.5 h-3.5"></i><span data-i18n="api.model">模型</span></button>
+                            </div>
+                            <div id="interrogateModelList" class="model-list"></div>
+                        </section>
+
                         <section id="msLoraBlock" class="block ms-lora-block">
                             <div class="block-head">
                                 <div>

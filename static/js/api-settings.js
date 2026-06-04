@@ -49,6 +49,7 @@ let rhWorkflowEditorGraphSvg = document.getElementById('rhWorkflowEditorGraphSvg
 let rhWorkflowEditorZoom = document.getElementById('rhWorkflowEditorZoom');
 const imageModelList = document.getElementById('imageModelList');
 const chatModelList = document.getElementById('chatModelList');
+const interrogateModelList = document.getElementById('interrogateModelList');
 const videoModelList = document.getElementById('videoModelList');
 const msLoraBlock = document.getElementById('msLoraBlock');
 const msLoraList = document.getElementById('msLoraList');
@@ -1987,6 +1988,7 @@ function recommendedProviderForApi(api){
         image_models:Array.isArray(api.image_models) ? [...api.image_models] : [],
         chat_models:Array.isArray(api.chat_models) ? [...api.chat_models] : [],
         video_models:Array.isArray(api.video_models) ? [...api.video_models] : [],
+        interrogate_models:Array.isArray(api.interrogate_models) ? [...api.interrogate_models] : [],
         model_protocols:(api.model_protocols && typeof api.model_protocols === 'object') ? {...api.model_protocols} : {},
         has_key:false,
         key_preview:''
@@ -2224,6 +2226,7 @@ function renderEditor(){
     renderModels('image');
     renderModels('chat');
     renderModels('video');
+    renderModels('interrogate');
     if(isModelScope) renderMsLoras();
     else if(msLoraList) msLoraList.innerHTML = '';
     renderProviderList();
@@ -2659,7 +2662,7 @@ function applyModelPicker(){
     item.image_models = image;
     item.chat_models = chat;
     item.video_models = video;
-    renderModels('image'); renderModels('chat'); renderModels('video');
+    renderModels('image'); renderModels('chat'); renderModels('video'); renderModels('interrogate');
     renderMsLoras();
     setStatus(`已应用 · 生图 ${image.length} / LLM ${chat.length} / 视频 ${video.length}，点保存生效`);
     closeModelPicker();
@@ -2699,8 +2702,9 @@ function modelProtocolSelectHtml(kind, index, model, item){
 }
 function renderModels(kind){
     const item = provider();
-    const key = kind === 'image' ? 'image_models' : kind === 'video' ? 'video_models' : 'chat_models';
-    const list = kind === 'image' ? imageModelList : kind === 'video' ? videoModelList : chatModelList;
+    const key = kind === 'image' ? 'image_models' : kind === 'video' ? 'video_models' : kind === 'interrogate' ? 'interrogate_models' : 'chat_models';
+    const list = kind === 'image' ? imageModelList : kind === 'video' ? videoModelList : kind === 'interrogate' ? interrogateModelList : chatModelList;
+    if(!list) return;
     const models = item?.[key] || [];
     if(!models.length){
         list.innerHTML = `<div class="empty">${tr('api.noModels')}</div>`;
@@ -2804,7 +2808,7 @@ function addProvider(){
     let id = 'custom-api';
     let index = 2;
     while(providers.some(item => item.id === id)) id = `custom-api-${index++}`;
-    providers.push({id, name:'API', base_url:'', protocol:'openai', image_generation_endpoint:'', image_edit_endpoint:'', enabled:true, primary:false, image_models:[], chat_models:[], video_models:[], has_key:false, key_preview:''});
+    providers.push({id, name:'API', base_url:'', protocol:'openai', image_generation_endpoint:'', image_edit_endpoint:'', enabled:true, primary:false, image_models:[], chat_models:[], video_models:[], interrogate_models:[], has_key:false, key_preview:''});
     selectedId = id;
     renderEditor();
 }
@@ -2867,19 +2871,19 @@ async function clearVolcengineAssetKeys(){
 }
 function addModel(kind){
     const item = provider();
-    const key = kind === 'image' ? 'image_models' : kind === 'video' ? 'video_models' : 'chat_models';
+    const key = kind === 'image' ? 'image_models' : kind === 'video' ? 'video_models' : kind === 'interrogate' ? 'interrogate_models' : 'chat_models';
     item[key] = [...(item[key] || []), ''];
     renderModels(kind);
     if(kind === 'image') renderMsLoras();
 }
 function modelProtocolStillUsed(item, name){
     if(!item || !name) return false;
-    const lists = ['image_models', 'chat_models', 'video_models'];
+    const lists = ['image_models', 'chat_models', 'video_models', 'interrogate_models'];
     return lists.some(k => Array.isArray(item[k]) && item[k].includes(name));
 }
 function updateModel(kind, index, value){
     const item = provider();
-    const key = kind === 'image' ? 'image_models' : kind === 'video' ? 'video_models' : 'chat_models';
+    const key = kind === 'image' ? 'image_models' : kind === 'video' ? 'video_models' : kind === 'interrogate' ? 'interrogate_models' : 'chat_models';
     const oldName = String(item[key][index] || '').trim();
     const newName = String(value || '').trim();
     item[key][index] = value;
@@ -2889,7 +2893,7 @@ function updateModel(kind, index, value){
             const proto = item.model_protocols[oldName];
             // 旧名称在其他列表里不再使用时才删除旧键
             const stillUsedElsewhere = (() => {
-                const lists = ['image_models', 'chat_models', 'video_models'];
+                const lists = ['image_models', 'chat_models', 'video_models', 'interrogate_models'];
                 return lists.some(k => Array.isArray(item[k]) && item[k].some((m, i) => !(k === key && i === index) && String(m || '').trim() === oldName));
             })();
             if(!stillUsedElsewhere) delete item.model_protocols[oldName];
@@ -2900,7 +2904,7 @@ function updateModel(kind, index, value){
 }
 function updateModelProtocol(kind, index, value){
     const item = provider();
-    const key = kind === 'image' ? 'image_models' : kind === 'video' ? 'video_models' : 'chat_models';
+    const key = kind === 'image' ? 'image_models' : kind === 'video' ? 'video_models' : kind === 'interrogate' ? 'interrogate_models' : 'chat_models';
     const name = String(item[key]?.[index] || '').trim();
     if(!name) return;
     if(!item.model_protocols || typeof item.model_protocols !== 'object') item.model_protocols = {};
@@ -2913,7 +2917,7 @@ function updateModelProtocol(kind, index, value){
 }
 function removeModel(kind, index){
     const item = provider();
-    const key = kind === 'image' ? 'image_models' : kind === 'video' ? 'video_models' : 'chat_models';
+    const key = kind === 'image' ? 'image_models' : kind === 'video' ? 'video_models' : kind === 'interrogate' ? 'interrogate_models' : 'chat_models';
     const removed = String(item[key][index] || '').trim();
     item[key].splice(index, 1);
     // 清理不再使用的协议覆盖
@@ -2953,6 +2957,7 @@ async function saveProviders(){
         item.image_models = unique(item.image_models || []);
         item.chat_models = unique(item.chat_models || []);
         item.video_models = unique(item.video_models || []);
+        item.interrogate_models = unique(item.interrogate_models || []);
         item.rh_apps = normalizeRhEntries(item.rh_apps || [], 'app');
         item.rh_workflows = normalizeRhEntries(item.rh_workflows || [], 'workflow');
         item.ms_loras = (Array.isArray(item.ms_loras) ? item.ms_loras : []).map(lora => ({
@@ -2985,6 +2990,7 @@ async function saveProviders(){
                 image_models:item.image_models || [],
                 chat_models:item.chat_models || [],
                 video_models:item.video_models || [],
+                interrogate_models:item.interrogate_models || [],
                 model_protocols:(item.model_protocols && typeof item.model_protocols === 'object') ? item.model_protocols : {},
                 ms_loras:item.id === 'modelscope' ? (item.ms_loras || []) : [],
                 ms_defaults_version:item.id === 'modelscope' ? (item.ms_defaults_version || 1) : 0,

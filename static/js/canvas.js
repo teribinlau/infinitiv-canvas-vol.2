@@ -2736,10 +2736,13 @@ function openImageNodeMenu(nodeId, clientX, clientY){
     const kind = mediaKindForNode(node);
     const canPreview = node.url && !isMissingAssetUrl(node.url) && ['image','video'].includes(kind);
     const canEdit = node.url && !isMissingAssetUrl(node.url) && kind === 'image';
+    const canInterrogate = node.url && !isMissingAssetUrl(node.url) && kind === 'image';
     imageNodeMenu.innerHTML = `
         ${canPreview ? `<button class="menu-btn" data-image-preview="${escapeAttr(nodeId)}"><i data-lucide="eye" class="w-4 h-4"></i><span>预览</span></button>` : ''}
         ${canEdit ? `<button class="menu-btn" data-image-edit="${escapeAttr(nodeId)}"><i data-lucide="pencil" class="w-4 h-4"></i><span>编辑</span></button>` : ''}
         <button class="menu-btn" data-image-replace="${escapeAttr(nodeId)}"><i data-lucide="image-plus" class="w-4 h-4"></i><span>替换</span></button>
+        ${canInterrogate ? `<button class="menu-btn" data-image-interrogate="${escapeAttr(nodeId)}"><i data-lucide="sparkles" class="w-4 h-4"></i><span>提示词反推</span></button>` : ''}
+        ${canInterrogate ? `<button class="menu-btn" data-image-focus="${escapeAttr(nodeId)}"><i data-lucide="target" class="w-4 h-4"></i><span>焦点编辑</span></button>` : ''}
     `;
     imageNodeMenu.style.left = `${clientX}px`;
     imageNodeMenu.style.top = `${clientY}px`;
@@ -2765,7 +2768,343 @@ function openImageNodeMenu(nodeId, clientX, clientY){
         closeImageNodeMenu();
         pickImageForNode(nodeId);
     };
+    const focusBtn = imageNodeMenu.querySelector('[data-image-focus]');
+    if(focusBtn){
+        focusBtn.onclick = e => {
+            e.stopPropagation();
+            closeImageNodeMenu();
+            enterFocusEdit(nodeId);
+        };
+    }
+    const interrogateBtn = imageNodeMenu.querySelector('[data-image-interrogate]');
+    if(interrogateBtn){
+        interrogateBtn.onclick = e => {
+            e.stopPropagation();
+            // 切换展开 4 种反推风格子项（再次点击折叠）
+            const existing = imageNodeMenu.querySelector('.interrogate-substyles');
+            if(existing){ existing.remove(); interrogateBtn.classList.remove('expanded'); return; }
+            interrogateBtn.classList.add('expanded');
+            const wrap = document.createElement('div');
+            wrap.className = 'interrogate-substyles';
+            wrap.innerHTML = REVERSE_STYLES.map(s => `
+                <button class="menu-btn interrogate-substyle" data-interrogate-style="${escapeAttr(s.id)}" style="padding-left:22px">
+                    <i data-lucide="corner-down-right" class="w-3.5 h-3.5" style="opacity:.45"></i>
+                    <span style="display:flex;flex-direction:column;align-items:flex-start;line-height:1.25">
+                        <span>${escapeHtml(s.label)}</span>
+                        <span style="opacity:.45;font-size:10px">${escapeHtml(s.hint)}</span>
+                    </span>
+                </button>`).join('');
+            interrogateBtn.after(wrap);
+            wrap.querySelectorAll('[data-interrogate-style]').forEach(btn => {
+                btn.onclick = ev => {
+                    ev.stopPropagation();
+                    closeImageNodeMenu();
+                    interrogateImageNode(nodeId, btn.dataset.interrogateStyle);
+                };
+            });
+            refreshIcons();
+        };
+    }
     refreshIcons();
+}
+// 反推提示词的 4 种输出风格（id 必须与后端 main.py:INTERROGATE_STYLES 一致）
+const REVERSE_STYLES = [
+    {id:'english-tags',    label:'英文关键词',     hint:'喂回 GPT / SD / MJ'},
+    {id:'chinese-natural', label:'中文自然语言',   hint:'记录 / 解读 / 配文'},
+    {id:'midjourney',      label:'Midjourney 命令', hint:'带 --ar --style 参数'},
+    {id:'summary',         label:'一句话总结',     hint:'主题 + 风格 + 情绪'},
+];
+function reverseStyleLabel(id){
+    return (REVERSE_STYLES.find(s => s.id === id) || REVERSE_STYLES[0]).label;
+}
+function looksLikeVisionChatModel(model){
+    const lc = String(model || '').trim().toLowerCase();
+    if(!lc) return false;
+    // 关键字与后端 main.py:looks_like_vision_chat_model 对齐，再补几个主流多模态命名
+    const keys = ['vision', 'vl-', '-vl-', 'internvl', 'qvq', 'qwen-vl',
+                  'doubao-vision', 'glm-4v', 'minicpm-v',
+                  '4o', 'omni', 'gemini-1.5', 'gemini-2', 'gemini-pro-vision',
+                  'claude-3', 'claude-sonnet', 'claude-haiku', 'claude-opus'];
+    return keys.some(k => lc.includes(k));
+}
+function pickVisionChatModel(provider){
+    const list = (provider?.chat_models || []).map(m => String(m || '').trim()).filter(Boolean);
+    return list.find(looksLikeVisionChatModel) || list[0] || '';
+}
+function pickInterrogateModel(provider){
+    // 优先使用平台专门为"反推提示词"配置的模型列表，未配置则回退到 chat_models 里的视觉模型
+    const interrogate = (provider?.interrogate_models || []).map(m => String(m || '').trim()).filter(Boolean);
+    if(interrogate.length) return interrogate[0];
+    return pickVisionChatModel(provider);
+}
+async function interrogateImageNode(nodeId, style='english-tags'){
+    const node = nodes.find(n => n.id === nodeId);
+    if(!node?.url) return;
+    const providerId = chatApiProviders()[0]?.id || 'comfly';
+    const provider = (apiProviders || []).find(p => p.id === providerId);
+    const model = pickInterrogateModel(provider);
+    showErrorModal(`正在用「${reverseStyleLabel(style)}」反推提示词，请稍候…`, '提示词反推');
+    try {
+        const res = await fetch('/api/interrogate-image', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({image_url: node.url, provider: providerId, model, style})
+        });
+        if(!res.ok){
+            const msg = await responseErrorMessage(res, '提示词反推失败');
+            showErrorModal(msg, '提示词反推失败');
+            return;
+        }
+        const data = await res.json();
+        const text = String(data.prompt || '').trim();
+        if(!text){
+            showErrorModal('模型没有返回提示词', '提示词反推失败');
+            return;
+        }
+        // 估算落点，避免反复反推时新节点完全重叠（按图右下方堆叠）
+        const stacked = nodes.filter(n => n?.type === 'prompt'
+            && Math.abs((n.x || 0) - ((node.x || 0) + Number(node.w || 260) + 36)) < 20
+            && Math.abs((n.y || 0) - (node.y || 0)) < 600).length;
+        const base = imageEditorOutputPoint(node, stacked * 40);
+        // 存 reverseSourceId + reverseStyle，供 prompt 节点上的「↻ 重推」按钮使用
+        const promptNode = addNode({id:uid('prompt'), type:'prompt', x:base.x, y:base.y, text, reverseSourceId:nodeId, reverseStyle:style});
+        if(promptNode){
+            selected.clear();
+            selected.add(promptNode.id);
+            render();
+        }
+        await copyTextToClipboard(text);
+        closeErrorModal();
+    } catch(err){
+        showErrorModal(err.message || '提示词反推失败', '提示词反推失败');
+    }
+}
+// 重新反推：用 prompt 节点上存的源图 id + 风格，重跑并就地更新该节点文本
+async function rerunInterrogateForPromptNode(promptNodeId){
+    const pn = nodes.find(n => n.id === promptNodeId);
+    if(!pn || pn.type !== 'prompt') return;
+    const style = pn.reverseStyle || 'english-tags';
+    const src = nodes.find(n => n.id === pn.reverseSourceId);
+    if(!src?.url || isMissingAssetUrl(src.url)){
+        showErrorModal('源图片节点已被删除或没有图片，无法重新反推', '重新反推');
+        return;
+    }
+    const providerId = chatApiProviders()[0]?.id || 'comfly';
+    const provider = (apiProviders || []).find(p => p.id === providerId);
+    const model = pickInterrogateModel(provider);
+    showErrorModal(`正在用「${reverseStyleLabel(style)}」重新反推…`, '重新反推');
+    try {
+        const res = await fetch('/api/interrogate-image', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({image_url: src.url, provider: providerId, model, style})
+        });
+        if(!res.ok){
+            const msg = await responseErrorMessage(res, '重新反推失败');
+            showErrorModal(msg, '重新反推失败');
+            return;
+        }
+        const data = await res.json();
+        const text = String(data.prompt || '').trim();
+        if(!text){
+            showErrorModal('模型没有返回提示词', '重新反推失败');
+            return;
+        }
+        pn.text = text;
+        scheduleSave();
+        render();
+        syncGeneratorInputs();
+        refreshGeneratorInputViews();
+        await copyTextToClipboard(text);
+        closeErrorModal();
+    } catch(err){
+        showErrorModal(err.message || '重新反推失败', '重新反推失败');
+    }
+}
+// 收集某个 prompt 节点可引用的参考图：prompt → 下游生成器 → 那些生成器连入的图片。
+// 返回按收集顺序去重的 [{url, name}]，序号即缩略图条上的「图片N」。
+function promptReferenceImages(promptNode){
+    if(!promptNode) return [];
+    const genIds = connections
+        .filter(c => c.from === promptNode.id)
+        .map(c => c.to)
+        .filter(to => { const g = nodes.find(n => n.id === to); return g && CANVAS_GENERATOR_TYPES.includes(g.type); });
+    const seen = new Set();
+    const out = [];
+    genIds.forEach(gid => {
+        const gen = nodes.find(n => n.id === gid);
+        if(!gen) return;
+        generatorSources(gen).forEach(src => {
+            const imgRefs = imageRefsOnly(src.refs || []);
+            if(!imgRefs.length) return;
+            const ref = imgRefs[0];
+            if(!ref.url || seen.has(ref.url)) return;
+            seen.add(ref.url);
+            out.push({url:ref.url, name:ref.name || src.label || 'image'});
+        });
+    });
+    return out;
+}
+// 在 prompt 节点 textarea 的光标处插入 @图片N 标记
+function insertPromptRefToken(node, textarea, container, num){
+    const token = `@图片${num}`;
+    const ta = textarea;
+    const prev = node.text || '';
+    const start = ta.selectionStart != null ? ta.selectionStart : prev.length;
+    const end = ta.selectionEnd != null ? ta.selectionEnd : start;
+    const before = prev.slice(0, start);
+    const after = prev.slice(end);
+    const pad = before.length > 0 && !/\s$/.test(before) ? ' ' : '';
+    const inserted = `${pad}${token} `;
+    const next = `${before}${inserted}${after}`;
+    node.text = next;
+    ta.value = next;
+    const caret = before.length + inserted.length;
+    ta.focus();
+    try { ta.setSelectionRange(caret, caret); } catch(e){}
+    refreshPromptCounter(container, node.text);
+    scheduleSave();
+    syncGeneratorInputs();
+    refreshGeneratorInputViews();
+}
+// ─── 焦点编辑：点选图片区域 → 视觉模型识别 → 回填提示词 ───
+let focusEditState = null;   // 进入焦点编辑模式时 = {nodeId}
+let focusPopoverEl = null;   // 当前候选浮层
+function focusEscHandler(e){ if(e.key === 'Escape') exitFocusEdit(); }
+function showFocusBanner(){
+    let b = document.getElementById('focusEditBanner');
+    if(!b){ b = document.createElement('div'); b.id = 'focusEditBanner'; b.className = 'focus-edit-banner'; document.body.appendChild(b); }
+    b.innerHTML = '<b>焦点编辑</b>：点击图片上要识别的部位 · 按 <kbd>Esc</kbd> 退出';
+    b.style.display = 'block';
+}
+function hideFocusBanner(){ const b = document.getElementById('focusEditBanner'); if(b) b.style.display = 'none'; }
+function enterFocusEdit(nodeId){
+    const node = nodes.find(n => n.id === nodeId);
+    if(!node?.url || isMissingAssetUrl(node.url) || mediaKindForNode(node) !== 'image') return;
+    focusEditState = {nodeId};
+    document.body.classList.add('focus-edit-active');
+    document.addEventListener('keydown', focusEscHandler);
+    showFocusBanner();
+    render();
+}
+function exitFocusEdit(){
+    if(!focusEditState) return;
+    focusEditState = null;
+    document.body.classList.remove('focus-edit-active');
+    document.removeEventListener('keydown', focusEscHandler);
+    hideFocusBanner();
+    closeFocusPopover();
+    render();
+}
+function closeFocusPopover(){ if(focusPopoverEl){ focusPopoverEl.remove(); focusPopoverEl = null; } }
+async function handleFocusClick(node, nx, ny, clientX, clientY){
+    showFocusPopover(clientX, clientY, {loading:true});
+    const providerId = chatApiProviders()[0]?.id || 'comfly';
+    const provider = (apiProviders || []).find(p => p.id === providerId);
+    const model = pickInterrogateModel(provider);
+    try {
+        const res = await fetch('/api/locate-point', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({image_url:node.url, x:nx, y:ny, provider:providerId, model})
+        });
+        if(!res.ok){
+            const msg = await responseErrorMessage(res, '区域识别失败');
+            showFocusPopover(clientX, clientY, {error:msg});
+            return;
+        }
+        const data = await res.json();
+        const candidates = (Array.isArray(data.candidates) && data.candidates.length) ? data.candidates : [data.label].filter(Boolean);
+        if(!candidates.length){ showFocusPopover(clientX, clientY, {error:'未识别出区域'}); return; }
+        showFocusPopover(clientX, clientY, {candidates, sourceNode:node});
+    } catch(err){
+        showFocusPopover(clientX, clientY, {error:err.message || '区域识别失败'});
+    }
+}
+function showFocusPopover(clientX, clientY, opts){
+    closeFocusPopover();
+    const el = document.createElement('div');
+    el.className = 'focus-popover';
+    el.style.left = `${Math.min(window.innerWidth - 190, Math.max(8, clientX))}px`;
+    el.style.top = `${Math.min(window.innerHeight - 130, Math.max(8, clientY))}px`;
+    el.onmousedown = e => e.stopPropagation();
+    el.onclick = e => e.stopPropagation();
+    el.oncontextmenu = e => { e.preventDefault(); e.stopPropagation(); };
+    if(opts.loading){
+        el.innerHTML = `<div class="focus-pop-row loading"><span class="focus-spinner"></span><span>识别中…</span></div>`;
+    } else if(opts.error){
+        el.innerHTML = `<div class="focus-pop-title">焦点编辑</div><div class="focus-pop-error">${escapeHtml(opts.error)}</div>`;
+    } else {
+        el.innerHTML = `<div class="focus-pop-title">识别结果 · 点击插入提示词</div>${opts.candidates.map(c => `<button class="focus-pop-item" data-focus-label="${escapeAttr(c)}"><i data-lucide="plus" class="w-3.5 h-3.5"></i><span>${escapeHtml(c)}</span></button>`).join('')}`;
+    }
+    document.body.appendChild(el);
+    focusPopoverEl = el;
+    el.querySelectorAll('[data-focus-label]').forEach(btn => {
+        btn.onclick = e => {
+            e.stopPropagation();
+            applyFocusLabel(opts.sourceNode, btn.dataset.focusLabel);
+            closeFocusPopover();
+        };
+    });
+    refreshIcons();
+}
+function findPromptNodeForImage(imgNode){
+    if(!imgNode) return null;
+    const genIds = connections.filter(c => c.from === imgNode.id).map(c => c.to)
+        .filter(to => { const g = nodes.find(n => n.id === to); return g && CANVAS_GENERATOR_TYPES.includes(g.type); });
+    for(const gid of genIds){
+        const pr = connections.filter(c => c.to === gid).map(c => nodes.find(n => n.id === c.from))
+            .find(n => n && n.type === 'prompt');
+        if(pr) return pr;
+    }
+    return null;
+}
+function insertTextIntoPromptNode(node, token){
+    if(!node || !token) return;
+    const wrap = nodesEl.querySelector(`.node[data-id="${node.id}"]`);
+    const ta = wrap ? wrap.querySelector('textarea') : null;
+    const box = wrap ? wrap.querySelector('.node-body') : null;
+    const prev = node.text || '';
+    // 焦点编辑时用户注意力在图片上、textarea 通常未聚焦 → 追加到末尾；
+    // 仅当 textarea 正在聚焦（用户手动打字中）才在光标处插入。
+    if(ta && document.activeElement === ta){
+        const start = ta.selectionStart != null ? ta.selectionStart : prev.length;
+        const end = ta.selectionEnd != null ? ta.selectionEnd : start;
+        const before = prev.slice(0, start), after = prev.slice(end);
+        const pad = before.length > 0 && !/\s$/.test(before) ? ' ' : '';
+        const inserted = `${pad}${token} `;
+        const next = before + inserted + after;
+        node.text = next;
+        ta.value = next;
+        const caret = before.length + inserted.length;
+        try { ta.setSelectionRange(caret, caret); } catch(e){}
+        if(box) refreshPromptCounter(box, next);
+    } else {
+        const pad = prev.length > 0 && !/\s$/.test(prev) ? ' ' : '';
+        const next = prev + pad + token + ' ';
+        node.text = next;
+        if(ta) ta.value = next;
+        if(box) refreshPromptCounter(box, next);
+    }
+    scheduleSave();
+    syncGeneratorInputs();
+    refreshGeneratorInputViews();
+}
+function flashNode(id){
+    const el = nodesEl.querySelector(`.node[data-id="${id}"]`);
+    if(!el) return;
+    el.classList.add('focus-flash');
+    setTimeout(() => el.classList.remove('focus-flash'), 700);
+}
+function applyFocusLabel(sourceNode, label){
+    if(!label) return;
+    const promptNode = findPromptNodeForImage(sourceNode);
+    if(promptNode){
+        insertTextIntoPromptNode(promptNode, label);
+        flashNode(promptNode.id);
+    } else {
+        copyTextToClipboard(label);
+        showErrorModal(`已识别「${label}」并复制到剪贴板。把这张图和一个提示词节点连到同一个生成器后，可自动回填。`, '焦点编辑');
+    }
 }
 function openImageNodePreview(nodeId){
     const node = nodes.find(n => n.id === nodeId);
@@ -5306,6 +5645,22 @@ function renderNode(node){
                 loadedImg.addEventListener('dblclick', openPreview, true);
             }
             body.addEventListener('dblclick', openPreview, true);
+            // 焦点编辑模式：在图片上挂透明点击层，采集归一化坐标
+            if(focusEditState && focusEditState.nodeId === node.id && previewWrap){
+                const flayer = document.createElement('div');
+                flayer.className = 'focus-click-layer';
+                flayer.title = '点击要识别的部位（Esc 退出）';
+                flayer.onmousedown = e => { e.stopPropagation(); };
+                flayer.onclick = e => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const rect = flayer.getBoundingClientRect();
+                    const nx = Math.min(1, Math.max(0, (e.clientX - rect.left) / Math.max(1, rect.width)));
+                    const ny = Math.min(1, Math.max(0, (e.clientY - rect.top) / Math.max(1, rect.height)));
+                    handleFocusClick(node, nx, ny, e.clientX, e.clientY);
+                };
+                previewWrap.appendChild(flayer);
+            }
             if(loadedImg && loadedImg.complete && loadedImg.naturalHeight > 0){
                 requestAnimationFrame(refreshGeometry);
             } else if(loadedImg) {
@@ -5322,7 +5677,16 @@ function renderNode(node){
     }
     if(node.type === 'prompt') {
         const templateActive = promptTemplateModal?.classList.contains('open') && promptTemplateNodeId === node.id;
-        body.innerHTML = `<div class="prompt-editor"><div class="prompt-toolbar"><button class="prompt-template-btn ${templateActive ? 'active' : ''}" type="button" data-prompt-template-open data-prompt-template-node-id="${escapeAttr(node.id)}" aria-pressed="${templateActive ? 'true' : 'false'}" title="${escapeAttr(tr('canvas.promptTemplateLibrary'))}"><i data-lucide="library"></i><span>${escapeHtml(tr('canvas.promptTemplateShort'))}</span></button>${promptCounterHtml(node.text || '')}</div><textarea placeholder="${tr('canvas.promptPlaceholder')}">${escapeHtml(node.text || '')}</textarea></div>`;
+        // 「↻ 重推」按钮：仅反推生成的 prompt 节点（带 reverseSourceId）显示
+        const rerunBtnHtml = node.reverseSourceId
+            ? `<button class="prompt-template-btn" type="button" data-prompt-rerun title="用「${escapeAttr(reverseStyleLabel(node.reverseStyle))}」重新反推源图"><i data-lucide="refresh-cw"></i><span>重推</span></button>`
+            : '';
+        // 缩略图条：可引用的参考图（来自连接的生成器），点击插入 @图片N
+        const refImgs = promptReferenceImages(node);
+        const refsBarHtml = refImgs.length
+            ? `<div class="prompt-refs-bar">${refImgs.map((r, i) => `<button class="prompt-ref-thumb" type="button" data-prompt-ref-idx="${i}" title="插入 @图片${i + 1}（${escapeAttr(r.name)}）"><img src="${escapeAttr(r.url)}" draggable="false"><span class="prompt-ref-badge">${i + 1}</span></button>`).join('')}</div>`
+            : '';
+        body.innerHTML = `<div class="prompt-editor"><div class="prompt-toolbar"><button class="prompt-template-btn ${templateActive ? 'active' : ''}" type="button" data-prompt-template-open data-prompt-template-node-id="${escapeAttr(node.id)}" aria-pressed="${templateActive ? 'true' : 'false'}" title="${escapeAttr(tr('canvas.promptTemplateLibrary'))}"><i data-lucide="library"></i><span>${escapeHtml(tr('canvas.promptTemplateShort'))}</span></button>${rerunBtnHtml}${promptCounterHtml(node.text || '')}</div>${refsBarHtml}<textarea placeholder="${tr('canvas.promptPlaceholder')}">${escapeHtml(node.text || '')}</textarea></div>`;
         const textarea = body.querySelector('textarea');
         const templateBtn = body.querySelector('[data-prompt-template-open]');
         templateBtn.onclick = e => {
@@ -5330,6 +5694,21 @@ function renderNode(node){
             e.stopPropagation();
             openPromptTemplateModal(node.id);
         };
+        const rerunBtn = body.querySelector('[data-prompt-rerun]');
+        if(rerunBtn){
+            rerunBtn.onclick = e => {
+                e.preventDefault();
+                e.stopPropagation();
+                rerunInterrogateForPromptNode(node.id);
+            };
+        }
+        body.querySelectorAll('[data-prompt-ref-idx]').forEach(btn => {
+            btn.onclick = e => {
+                e.preventDefault();
+                e.stopPropagation();
+                insertPromptRefToken(node, textarea, body, Number(btn.dataset.promptRefIdx) + 1);
+            };
+        });
         bindScrollableText(textarea);
         textarea.oninput = e => {
             node.text = e.target.value;

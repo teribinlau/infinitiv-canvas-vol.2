@@ -1088,6 +1088,7 @@ def normalize_provider(item):
         "image_models": model_list_from_values(item.get("image_models") or []),
         "chat_models": model_list_from_values(item.get("chat_models") or []),
         "video_models": model_list_from_values(item.get("video_models") or []),
+        "interrogate_models": model_list_from_values(item.get("interrogate_models") or []),
         "model_protocols": normalize_model_protocols(item.get("model_protocols")),
         "ms_loras": normalize_ms_loras(item.get("ms_loras") or []),
         "ms_defaults_version": int(item.get("ms_defaults_version") or 0),
@@ -2240,6 +2241,7 @@ class ApiProviderPayload(BaseModel):
     image_models: List[str] = []
     chat_models: List[str] = []
     video_models: List[str] = []
+    interrogate_models: List[str] = []
     model_protocols: Dict[str, str] = {}
     ms_loras: List[Dict[str, Any]] = []
     ms_defaults_version: int = 0
@@ -9906,6 +9908,267 @@ async def chat(payload: ChatRequest, request: Request, x_user_id: str = Header(d
     conversation["updated_at"] = now_ms()
     save_conversation(user_id, conversation)
     return {"conversation": conversation, "message": assistant_message}
+
+# 反推提示词的 4 种输出风格，每种对应一套 system prompt。
+# 与前端 canvas.js 的 REVERSE_STYLES 一一对应（id 必须一致）。
+INTERROGATE_STYLES = {
+    "english-tags": (
+        "你是一位顶级的 AI 绘画提示词专家。仔细观察用户提供的图片，输出一段**英文**图像生成 prompt，"
+        "要包含：主体描述、画面构图、风格、光照氛围、色彩、镜头/视角、细节质感、艺术家或参考流派（如适用）。"
+        "提示词必须紧凑、密集、富有画面感，使用逗号分隔的关键词组形式。直接输出 prompt，不要任何前言、引号或解释。"
+    ),
+    "chinese-natural": (
+        "你是一位专业的视觉评论家。仔细观察用户提供的图片，用**中文自然语言**写一段 150-250 字的描述。"
+        "结构：开篇一句主题定位 → 主体细节（人物/物体的特征、动作、表情、服装/材质）→ "
+        "环境与氛围（场景、光线、色调、季节/时间）→ 风格与情绪（艺术风格、镜头感、整体气质）。"
+        "语言要画面感强但克制，避免堆砌形容词。直接输出描述正文，不要前言、序号或小标题。"
+    ),
+    "midjourney": (
+        "你是 Midjourney 提示词工程师。仔细观察用户提供的图片，输出一条 **Midjourney v6/v7 风格的英文 prompt 命令**。要求：\n"
+        "1. 主体在最前（具体、视觉化的名词短语）\n"
+        "2. 中段描述风格、媒介、艺术家、光照、色彩、构图、镜头（用逗号分隔的密集关键词）\n"
+        "3. 结尾附加 Midjourney 参数：根据图像推断合适的 `--ar W:H`（如 --ar 16:9 / --ar 2:3 / --ar 1:1）、"
+        "`--style raw` 或省略、`--stylize 100-500`、可选 `--chaos 5-20`、`--quality 1`\n"
+        "4. 整条命令一行，不要换行，不要解释\n"
+        "直接输出 prompt 命令，不要任何前言或引号。"
+    ),
+    "summary": (
+        "你是一位视觉编辑。仔细观察用户提供的图片，用**一句中文**（不超过 40 字）总结这张图。"
+        "结构：[主体 / 场景] + [风格 / 媒介] + [情绪 / 氛围]。"
+        "例如「赛博朋克都市夜雨中的孤独旅人，胶片质感与霓虹倒影」。直接输出这一句话，不要前言、引号或多余文字。"
+    ),
+}
+INTERROGATE_DEFAULT_STYLE = "english-tags"
+
+class InterrogateImageRequest(BaseModel):
+    image_url: str
+    provider: str = ""
+    model: str = ""
+    style: str = INTERROGATE_DEFAULT_STYLE
+
+@app.post("/api/interrogate-image")
+async def interrogate_image(payload: InterrogateImageRequest):
+    if not (payload.image_url or "").strip():
+        raise HTTPException(status_code=400, detail="image_url 不能为空")
+
+    # 优先使用平台设置里专门的"反推提示词模型"列表第一个；
+    # 前端如果显式传了 model，仍然以前端为准。
+    chosen_model = (payload.model or "").strip()
+    if not chosen_model:
+        try:
+            _p = get_api_provider(payload.provider) if payload.provider else {}
+            _interrogate = [str(m or "").strip() for m in (_p.get("interrogate_models") or []) if str(m or "").strip()]
+            if _interrogate:
+                chosen_model = _interrogate[0]
+        except Exception:
+            pass
+
+    chat_base, chat_hdrs, model = resolve_chat_provider(payload.provider, chosen_model, chosen_model)
+    provider_obj = get_api_provider(payload.provider) if payload.provider not in ("modelscope",) else {}
+
+    image_url_for_model = media_reference_to_url(payload.image_url, max_image_size=1536) or payload.image_url
+    if not image_url_for_model:
+        raise HTTPException(status_code=400, detail="无法读取图片")
+
+    style_id = (payload.style or INTERROGATE_DEFAULT_STYLE).strip()
+    system_prompt = INTERROGATE_STYLES.get(style_id) or INTERROGATE_STYLES[INTERROGATE_DEFAULT_STYLE]
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": [
+            {"type": "text", "text": "请观察这张图，按要求输出对应的提示词。"},
+            {"type": "image_url", "image_url": {"url": image_url_for_model}},
+        ]},
+    ]
+
+    try:
+        async with httpx.AsyncClient(timeout=AI_REQUEST_TIMEOUT) as client:
+            req_body = {"model": model, "messages": messages}
+            if is_apimart_provider(provider_obj):
+                req_body["stream"] = False
+            response = await client.post(
+                f"{chat_base}/chat/completions",
+                headers=chat_hdrs,
+                json=req_body,
+            )
+            response.raise_for_status()
+            raw = response.json()
+    except httpx.HTTPStatusError as exc:
+        body = exc.response.text or ""
+        friendly = friendly_chat_error_detail(body, model, provider_obj)
+        raise HTTPException(status_code=exc.response.status_code, detail=friendly or f"上游接口错误：{body[:300]}") from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"请求上游接口失败：{exc}") from exc
+
+    text = text_from_chat_response(raw).strip()
+    if not text:
+        raise HTTPException(status_code=502, detail="模型返回了空回复，可能当前模型不支持图像输入")
+    return {"prompt": text, "model": model, "style": style_id}
+
+# ─────────────────── 焦点编辑：点选区域识别 ───────────────────
+
+def _focus_load_image(image_url: str) -> Image.Image:
+    """从图片节点的 url（/output、/assets、data:、http）读出 PIL 图像。"""
+    url = (image_url or "").strip()
+    if not url:
+        raise HTTPException(status_code=400, detail="image_url 不能为空")
+    path = output_file_from_url(url)
+    if path and os.path.isfile(path):
+        return Image.open(path).convert("RGB")
+    if url.startswith("data:"):
+        try:
+            b64 = url.split(",", 1)[1]
+            return Image.open(BytesIO(base64.b64decode(b64))).convert("RGB")
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"无法解析图片数据：{exc}") from exc
+    if url.startswith("http://") or url.startswith("https://"):
+        remote = fetch_remote_media_bytes(url)
+        if remote:
+            content = remote[0] if isinstance(remote, (tuple, list)) else remote
+            try:
+                return Image.open(BytesIO(content)).convert("RGB")
+            except Exception as exc:
+                raise HTTPException(status_code=400, detail=f"无法读取远程图片：{exc}") from exc
+    by_name = local_media_file_by_basename(filename_from_media_url(url, ""))
+    if by_name and os.path.isfile(by_name):
+        return Image.open(by_name).convert("RGB")
+    raise HTTPException(status_code=400, detail="无法读取该图片用于焦点识别")
+
+def _pil_to_data_url(img: Image.Image, quality: int = 88) -> str:
+    if img.mode != "RGB":
+        img = img.convert("RGB")
+    buf = BytesIO()
+    img.save(buf, format="JPEG", quality=quality)
+    return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+
+def build_focus_images(img: Image.Image, nx: float, ny: float):
+    """返回 (标了红圈/十字的全图 data_url, 以点击点为中心放大的局部 data_url)。
+    给视觉模型「看红圈」比给纯坐标数字准得多，再配局部放大进一步提升精度。"""
+    from PIL import ImageDraw
+    w, h = img.size
+    nx = min(max(float(nx), 0.0), 1.0)
+    ny = min(max(float(ny), 0.0), 1.0)
+    cx, cy = nx * w, ny * h
+
+    # 1) 全图（长边缩到 ≤1024）+ 红圈 + 十字
+    full = img.copy()
+    scale = min(1.0, 1024.0 / max(w, h))
+    if scale < 1.0:
+        full = full.resize((max(1, round(w * scale)), max(1, round(h * scale))), Image.LANCZOS)
+    fw, fh = full.size
+    fcx, fcy = nx * fw, ny * fh
+    d = ImageDraw.Draw(full)
+    r = max(12, int(min(fw, fh) * 0.045))
+    lw = max(3, int(r * 0.2))
+    d.ellipse([fcx - r, fcy - r, fcx + r, fcy + r], outline=(255, 30, 30), width=lw)
+    d.line([fcx - r * 1.4, fcy, fcx + r * 1.4, fcy], fill=(255, 30, 30), width=max(2, lw - 1))
+    d.line([fcx, fcy - r * 1.4, fcx, fcy + r * 1.4], fill=(255, 30, 30), width=max(2, lw - 1))
+    full_url = _pil_to_data_url(full)
+
+    # 2) 以点击点为中心裁一块（半边长 = 短边*0.2）放大到 512 + 小红圈
+    half = max(24, int(min(w, h) * 0.2))
+    left = int(max(0, cx - half)); top = int(max(0, cy - half))
+    right = int(min(w, cx + half)); bottom = int(min(h, cy + half))
+    if right <= left: right = min(w, left + 1)
+    if bottom <= top: bottom = min(h, top + 1)
+    crop = img.crop((left, top, right, bottom))
+    cw, ch = crop.size
+    cs = 512.0 / max(1, max(cw, ch))
+    crop = crop.resize((max(1, round(cw * cs)), max(1, round(ch * cs))), Image.LANCZOS)
+    cd = ImageDraw.Draw(crop)
+    ccx = (cx - left) * cs; ccy = (cy - top) * cs
+    cr = max(10, int(min(crop.size) * 0.07))
+    cd.ellipse([ccx - cr, ccy - cr, ccx + cr, ccy + cr], outline=(255, 30, 30), width=4)
+    crop_url = _pil_to_data_url(crop)
+    return full_url, crop_url
+
+def _parse_locate_result(text: str):
+    """从模型返回里解析 {label, candidates}，对 markdown / 杂文本容错。"""
+    raw = (text or "").strip()
+    if raw.startswith("```"):
+        raw = re.sub(r"^```[a-zA-Z]*\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw).strip()
+    m = re.search(r"\{.*\}", raw, re.DOTALL)
+    if m:
+        try:
+            data = json.loads(m.group(0))
+            label = str(data.get("label") or "").strip()
+            cands = [str(c).strip() for c in (data.get("candidates") or []) if str(c).strip()]
+            out = []
+            for c in [label, *cands]:
+                if c and c not in out:
+                    out.append(c)
+            if out:
+                return out[0], out
+        except Exception:
+            pass
+    fallback = (raw.split("\n")[0] if raw else "").strip().strip('"').strip("。.,，、")[:20]
+    return fallback, ([fallback] if fallback else [])
+
+class LocatePointRequest(BaseModel):
+    image_url: str
+    x: float = 0.5
+    y: float = 0.5
+    provider: str = ""
+    model: str = ""
+
+@app.post("/api/locate-point")
+async def locate_point(payload: LocatePointRequest):
+    if not (payload.image_url or "").strip():
+        raise HTTPException(status_code=400, detail="image_url 不能为空")
+
+    # 模型选择：与反推一致，优先平台的 interrogate_models 第一个
+    chosen_model = (payload.model or "").strip()
+    if not chosen_model:
+        try:
+            _p = get_api_provider(payload.provider) if payload.provider else {}
+            _list = [str(m or "").strip() for m in (_p.get("interrogate_models") or []) if str(m or "").strip()]
+            if _list:
+                chosen_model = _list[0]
+        except Exception:
+            pass
+    chat_base, chat_hdrs, model = resolve_chat_provider(payload.provider, chosen_model, chosen_model)
+    provider_obj = get_api_provider(payload.provider) if payload.provider not in ("modelscope",) else {}
+
+    img = _focus_load_image(payload.image_url)
+    full_url, crop_url = build_focus_images(img, payload.x, payload.y)
+
+    system_prompt = (
+        "你是图像区域识别助手。用户在图片上用红色圆圈和十字标出了一个位置。"
+        "请判断标记中心指向的是图中的什么具体物体或部位，给出最贴切的中文名词短语"
+        "（2-8字，例如「左眼」「红色帽子」「右手」「背景天空」）。"
+        "再给出 2-3 个备选名词（可大可小的范围，如「眼睛」「脸部」）。"
+        "只返回严格 JSON：{\"label\":\"...\",\"candidates\":[\"...\",\"...\"]}，不要任何解释、前言或 markdown。"
+    )
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": [
+            {"type": "text", "text": "第一张是标了红圈的全图（看红圈在整体中的位置），第二张是红圈附近的放大细节。红圈中心指向的是什么？只输出 JSON。"},
+            {"type": "image_url", "image_url": {"url": full_url}},
+            {"type": "image_url", "image_url": {"url": crop_url}},
+        ]},
+    ]
+
+    try:
+        async with httpx.AsyncClient(timeout=AI_REQUEST_TIMEOUT) as client:
+            req_body = {"model": model, "messages": messages}
+            if is_apimart_provider(provider_obj):
+                req_body["stream"] = False
+            response = await client.post(f"{chat_base}/chat/completions", headers=chat_hdrs, json=req_body)
+            response.raise_for_status()
+            raw = response.json()
+    except httpx.HTTPStatusError as exc:
+        body = exc.response.text or ""
+        friendly = friendly_chat_error_detail(body, model, provider_obj)
+        raise HTTPException(status_code=exc.response.status_code, detail=friendly or f"上游接口错误：{body[:300]}") from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"请求上游接口失败：{exc}") from exc
+
+    text = text_from_chat_response(raw).strip()
+    label, candidates = _parse_locate_result(text)
+    if not label:
+        raise HTTPException(status_code=502, detail="模型未能识别该区域，可能当前模型不支持图像输入")
+    return {"label": label, "candidates": candidates, "x": payload.x, "y": payload.y, "model": model}
 
 @app.post("/api/chat/stream")
 async def chat_stream(payload: ChatRequest, request: Request, x_user_id: str = Header(default="")):
