@@ -1946,6 +1946,33 @@ function addPromptNode(point){
     const p = point || defaultPoint(0, 0);
     return addNode({id:uid('prompt'), type:'prompt', x:p.x, y:p.y, text:''});
 }
+// 风格预设：每个含 phrase(追加到 prompt 末尾的英文风格关键词) + swatch(色块预览)
+const STYLE_PRESETS = [
+    {id:'none', label:'No style', phrase:'', swatch:'transparent'},
+    {id:'photoreal', label:'Photoreal', phrase:'photorealistic, 35mm lens, natural lighting, high detail', swatch:'linear-gradient(180deg,#93c5fd 0%,#f5f5f4 50%,#65a30d 100%)'},
+    {id:'cinematic', label:'Cinematic', phrase:'cinematic lighting, shallow depth of field, film grain, anamorphic lens flare', swatch:'radial-gradient(circle at 30% 35%,#fcd34d 0%,#b45309 30%,#1c1917 75%)'},
+    {id:'anime', label:'Anime', phrase:'anime style, vibrant colors, clean cel-shaded line art', swatch:'linear-gradient(135deg,#f472b6 0%,#fbbf24 45%,#38bdf8 100%)'},
+    {id:'ghibli', label:'Ghibli', phrase:'studio ghibli anime style, hand-painted watercolor backgrounds, soft warm sunlight, miyazaki film, lush nature, gentle pastoral mood', swatch:'linear-gradient(180deg,#93c5fd 0%,#fef3c7 55%,#86efac 100%)'},
+    {id:'pixar', label:'Pixar 3D', phrase:'pixar 3d animation style, soft volumetric lighting, expressive character design, glossy subsurface materials, cinematic depth of field', swatch:'radial-gradient(circle at 35% 30%,#ffffff 0%,#fbbf24 35%,#ea580c 70%,#7c2d12 100%)'},
+    {id:'comic', label:'Comic', phrase:'american comic book art, bold ink outlines, halftone dot shading, dynamic action poses, four-color print, kirby cover style', swatch:'radial-gradient(circle at 50% 50%,#fde047 0%,#f97316 45%,#b91c1c 100%)'},
+    {id:'indie-pop', label:'Indie Pop', phrase:'indie cartoon illustration crossed with neo-naive pop art, flat bold mismatched colors, thick wonky hand-drawn outlines, deliberately misshapen shapes, mid-2020s zine illustration, hyein park style', swatch:'conic-gradient(from 30deg at 50% 50%,#f472b6 0deg 90deg,#fde047 90deg 180deg,#4ade80 180deg 270deg,#60a5fa 270deg 360deg)'},
+    {id:'watercolor', label:'Watercolor', phrase:'soft watercolor painting, paper texture, gentle gradients, wet-on-wet bleeds', swatch:'radial-gradient(circle at 30% 35%,#fecdd3 0%,#c7d2fe 50%,#fef3c7 100%)'},
+    {id:'oil', label:'Oil Painting', phrase:'oil painting, thick impasto brush strokes, rich colors, canvas texture', swatch:'linear-gradient(135deg,#92400e 0%,#be123c 35%,#4d7c0f 70%,#1e3a8a 100%)'},
+    {id:'ukiyoe', label:'Ukiyo-e', phrase:'japanese ukiyo-e woodblock print, flat saturated colors, hokusai inspired, traditional kimono patterns, washi paper texture, no shading', swatch:'linear-gradient(180deg,#fed7aa 0%,#fde047 35%,#dc2626 65%,#1e293b 100%)'},
+    {id:'sketch', label:'Pencil Sketch', phrase:'black and white pencil sketch, hand drawn, cross-hatching, graphite', swatch:'repeating-linear-gradient(45deg,#ffffff 0px,#ffffff 2px,#525252 2px,#525252 3px)'},
+    {id:'lineart', label:'Line Art', phrase:'clean black ink line art on pure white, minimal hatching, no color, technical botanical illustration', swatch:'repeating-linear-gradient(45deg,#ffffff 0px,#ffffff 4px,#0a0a0a 4px,#0a0a0a 5px)'},
+    {id:'pixel', label:'Pixel Art', phrase:'pixel art, 16-bit, limited palette, chunky pixels', swatch:'conic-gradient(from 0deg at 50% 50%,#f87171 0deg 90deg,#fbbf24 90deg 180deg,#60a5fa 180deg 270deg,#34d399 270deg 360deg)'},
+    {id:'3d', label:'3D Render', phrase:'3D render, octane render, physically based materials, studio lighting', swatch:'radial-gradient(circle at 28% 28%,#ffffff 0%,#818cf8 35%,#1e1b4b 90%)'},
+    {id:'ms-paint', label:'MS-Paint', phrase:'intentionally crude ms-paint doodle, mouse-drawn jagged 1-pixel outlines, default windows paint bucket fills, accidental color misclicks, amateur childlike drawing, no shading, pure flat primary colors only', swatch:'radial-gradient(circle at 30% 40%,#dc2626 0%,#dc2626 18%,transparent 18%),radial-gradient(circle at 70% 65%,#2563eb 0%,#2563eb 14%,transparent 14%),#ffffff'},
+    {id:'risograph', label:'Risograph', phrase:'risograph print, two-color overprint, fluorescent pink and electric blue inks, paper texture, slight registration offset, halftone dithering, photocopied zine aesthetic', swatch:'linear-gradient(135deg,#ec4899 0%,#ec4899 50%,#38bdf8 50%,#38bdf8 100%)'},
+    {id:'vaporwave', label:'Vaporwave', phrase:'vaporwave aesthetic, pastel pink and cyan, 1990s mall liminal space, retro grid floor, marble statue, dreamy melancholic mood', swatch:'linear-gradient(135deg,#f0abfc 0%,#67e8f9 100%)'},
+    {id:'neon', label:'Neon / Cyberpunk', phrase:'cyberpunk, neon lights, wet streets, bladerunner mood, holographic signage', swatch:'linear-gradient(135deg,#ec4899 0%,#8b5cf6 45%,#06b6d4 100%)'},
+];
+function stylePresetById(id){ return STYLE_PRESETS.find(s => s.id === id) || STYLE_PRESETS[0]; }
+function addStyleNode(point){
+    const p = point || defaultPoint(0, 40);
+    return addNode({id:uid('style'), type:'style', x:p.x, y:p.y, styleId:'none'});
+}
 function addLoopNode(point){
     const p = point || defaultPoint(40, 0);
     return addNode({
@@ -2631,7 +2658,7 @@ function linkCreateOptions(state){
     const node = nodes.find(n => n.id === state?.originId);
     if(!node) return [];
     if(state.originKind === 'out'){
-        if(['image','prompt','loop','group','promptGroup','llm','output'].includes(node.type)){
+        if(['image','prompt','style','loop','group','promptGroup','llm','output'].includes(node.type)){
             return [
                 {type:'generator', label:tr('canvas.apiGenerate'), icon:'wand-sparkles'},
                 {type:'msgen', label:tr('canvas.modelscopeGenerate'), icon:'cloud-lightning'},
@@ -2648,6 +2675,7 @@ function linkCreateOptions(state){
         return [
             {type:'image', label:tr('canvas.imageCard'), icon:'image-plus'},
             {type:'prompt', label:tr('canvas.prompt'), icon:'text-cursor-input'},
+            ...(CANVAS_GENERATOR_TYPES.includes(node.type) ? [{type:'style', label:tr('canvas.styleNode'), icon:'palette'}] : []),
             {type:'loop', label:tr('canvas.loopNode'), icon:'repeat-2'},
             {type:'group', label:tr('canvas.group'), icon:'group'},
             {type:'llm', label:'LLM', icon:'message-square-text'}
@@ -3343,6 +3371,7 @@ function createLinkedNode(type){
 function createNodeByType(type, point){
     if(type === 'image') return addImageNode(point);
     if(type === 'prompt') return addPromptNode(point);
+    if(type === 'style') return addStyleNode(point);
     if(type === 'loop') return addLoopNode(point);
     if(type === 'group') return addGroupNode(point);
     if(type === 'llm') return addLLMNode(point);
@@ -3359,6 +3388,7 @@ function menuAdd(type){
     closeCreateMenu();
     if(type === 'image') addImageNode(menuPoint);
     if(type === 'prompt') addPromptNode(menuPoint);
+    if(type === 'style') addStyleNode(menuPoint);
     if(type === 'loop') addLoopNode(menuPoint);
     if(type === 'llm') addLLMNode(menuPoint);
     if(type === 'generator') addGeneratorNode(menuPoint);
@@ -5586,7 +5616,7 @@ function renderNode(node){
         if(node.type === 'output') openOutputNodeMenu(node.id, e.clientX, e.clientY);
         else openGeneratorNodeMenu(node.id, e.clientX, e.clientY);
     };
-    const title = node.type === 'image' ? 'Image' : node.type === 'prompt' ? 'Prompt' : node.type === 'loop' ? tr('canvas.loopNode') : node.type === 'promptGroup' ? 'Prompts' : node.type === 'group' ? 'Group' : node.type === 'output' ? 'Output' : node.type === 'llm' ? 'LLM' : node.type === 'comfy' ? 'ComfyUI' : node.type === 'ltxDirector' ? tr('canvas.ltxDirector') : node.type === 'rh' ? 'RunningHub' : node.type === 'msgen' ? tr('canvas.modelscopeGenerate') : node.type === 'video' ? tr('canvas.videoGenerateNode') : tr('canvas.apiGenerate');
+    const title = node.type === 'image' ? 'Image' : node.type === 'prompt' ? 'Prompt' : node.type === 'style' ? 'Style' : node.type === 'loop' ? tr('canvas.loopNode') : node.type === 'promptGroup' ? 'Prompts' : node.type === 'group' ? 'Group' : node.type === 'output' ? 'Output' : node.type === 'llm' ? 'LLM' : node.type === 'comfy' ? 'ComfyUI' : node.type === 'ltxDirector' ? tr('canvas.ltxDirector') : node.type === 'rh' ? 'RunningHub' : node.type === 'msgen' ? tr('canvas.modelscopeGenerate') : node.type === 'video' ? tr('canvas.videoGenerateNode') : tr('canvas.apiGenerate');
     const displayTitle = node.type === 'image' && node.url ? nodeTitleForMedia(node) : title;
     // 失败徽章只在一键运行模式中显示，单节点失败已通过 alert 提示
     const showStatus = ['generator','msgen','comfy','ltxDirector','llm','video','rh'].includes(node.type) && node.runStatus
@@ -5718,6 +5748,29 @@ function renderNode(node){
             refreshGeneratorInputViews();
         };
     }
+    if(node.type === 'style') {
+        const cur = stylePresetById(node.styleId || 'none');
+        body.innerHTML = `<div class="style-editor"><button class="style-current" type="button" data-style-toggle aria-expanded="false"><span class="style-swatch" style="background:${cur.swatch}"></span><span class="style-current-label">${escapeHtml(cur.label)}</span><i data-lucide="chevron-down" class="style-caret w-4 h-4"></i></button><div class="style-list" hidden>${STYLE_PRESETS.map(s => `<button class="style-item ${s.id === cur.id ? 'active' : ''}" type="button" data-style-pick="${escapeAttr(s.id)}"><span class="style-swatch" style="background:${s.swatch}"></span><span class="style-item-label">${escapeHtml(s.label)}</span></button>`).join('')}</div></div>`;
+        const toggle = body.querySelector('[data-style-toggle]');
+        const list = body.querySelector('.style-list');
+        toggle.onclick = e => {
+            e.preventDefault(); e.stopPropagation();
+            const open = list.hidden;
+            list.hidden = !open;
+            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            toggle.classList.toggle('open', open);
+        };
+        body.querySelectorAll('[data-style-pick]').forEach(btn => {
+            btn.onclick = e => {
+                e.preventDefault(); e.stopPropagation();
+                node.styleId = btn.dataset.stylePick;
+                scheduleSave();
+                render();
+                syncGeneratorInputs();
+                refreshGeneratorInputViews();
+            };
+        });
+    }
     if(node.type === 'loop') body.appendChild(renderLoopBody(node));
     if(node.type === 'group') {
         const items = (node.items || []).map(id => nodes.find(n => n.id === id)).filter(Boolean);
@@ -5779,7 +5832,7 @@ function renderNode(node){
         startNodeDrag(e, node);
     };
     const canInput = ['generator','comfy','ltxDirector','output','llm','msgen','video','rh'].includes(node.type) || (node.type === 'loop' && (node.imageInput || node.showPrompt));
-    const canOutput = ['image','prompt','loop','group','promptGroup','generator','comfy','ltxDirector','llm','msgen','video','rh','output'].includes(node.type);
+    const canOutput = ['image','prompt','style','loop','group','promptGroup','generator','comfy','ltxDirector','llm','msgen','video','rh','output'].includes(node.type);
     if(canInput) el.insertAdjacentHTML('beforeend', `<div class="port in" title="${tr('canvas.connectHere')}"></div>`);
     if(canOutput) el.insertAdjacentHTML('beforeend', `<div class="port out" title="${tr('canvas.dragConnect')}"></div>`);
     el.insertAdjacentHTML('beforeend', `<div class="resize-handle" title="${tr('canvas.resize')}"></div>`);
@@ -5904,6 +5957,7 @@ function refreshOutputNodeContent(node){
 function defaultNodeSize(type){
     if(type === 'image') return {w:260, h:336};
     if(type === 'prompt') return {w:310, h:0};
+    if(type === 'style') return {w:230, h:0};
     if(type === 'loop') return {w:336, h:0};
     if(type === 'llm') return {w:420, h:590};
     if(type === 'generator') return {w:380, h:0};
@@ -9390,6 +9444,7 @@ function generatorSources(gen){
             return sources;
         }
         if(n.type === 'prompt') return {id:n.id, type:'prompt', label:(n.text || '提示词').slice(0, 32), refs:[], prompt:n.text || ''};
+        if(n.type === 'style') { const preset = stylePresetById(n.styleId || 'none'); return {id:n.id, type:'style', label:preset.label, refs:[], prompt:preset.phrase || ''}; }
         if(n.type === 'loop') {
             const ctx = gen?._activeLoopCtx || loopContext || null;
             const prompt = renderLoopPrompt(n, ctx);
@@ -9422,7 +9477,9 @@ function generatorSources(gen){
 function orderedSources(gen, sources){
     gen.inputs = (gen.inputs || []).filter(id => sources.some(s => s.id === id));
     sources.forEach(s => { if(!gen.inputs.includes(s.id)) gen.inputs.push(s.id); });
-    return gen.inputs.map(id => sources.find(s => s.id === id)).filter(Boolean);
+    // 风格节点排到末尾，使其 phrase 追加在 prompt 之后（稳定排序，其余顺序不变）
+    return gen.inputs.map(id => sources.find(s => s.id === id)).filter(Boolean)
+        .sort((a, b) => (a.type === 'style' ? 1 : 0) - (b.type === 'style' ? 1 : 0));
 }
 function reorderInput(gen, movedId, targetId){
     if(!movedId || movedId === targetId) return;
@@ -12538,7 +12595,7 @@ function canConnect(fromId, toId){
     }
     if(to.type === 'llm') return ['prompt','loop','promptGroup','llm','image','group','output'].includes(from.type);
     if(from.type === 'llm') return CANVAS_GENERATOR_TYPES.includes(to.type);
-    return CANVAS_GENERATOR_TYPES.includes(to.type) && ['image','prompt','loop','group','promptGroup','output','llm'].includes(from.type);
+    return CANVAS_GENERATOR_TYPES.includes(to.type) && ['image','prompt','style','loop','group','promptGroup','output','llm'].includes(from.type);
 }
 function sanitizeConnections(){
     connections = (connections || []).filter(c => canConnect(c.from, c.to));

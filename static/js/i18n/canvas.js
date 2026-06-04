@@ -12,6 +12,7 @@
         "canvas.image": { zh: "上传", en: "Upload" },
         "canvas.uploadCard": { zh: "上传卡片", en: "Upload Card" },
         "canvas.prompt": { zh: "提示词", en: "Prompt" },
+        "canvas.styleNode": { zh: "风格", en: "Style" },
         "canvas.promptTemplateLibrary": { zh: "提示词模板库", en: "Prompt Templates" },
         "canvas.promptTemplateShort": { zh: "模板库", en: "Templates" },
         "canvas.promptTemplateSystem": { zh: "系统提示词", en: "System prompts" },
