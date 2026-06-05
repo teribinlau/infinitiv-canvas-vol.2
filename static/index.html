@@ -1317,6 +1317,81 @@
             max-width: 42px;
         }
     </style>
+
+    <!-- ============================================================
+         Bugatti theme — 来自 DESIGN.md（npx getdesign add bugatti）
+         极简高端汽车风：纯黑画布、白色宽字距大写、发丝级边框、
+         无强调色、锐利直角。以覆盖现有 CSS 变量的方式应用，可逆。
+         ============================================================ -->
+    <style id="bugatti-theme">
+        :root,
+        html.theme-dark,
+        body.theme-dark {
+            --accent: #ffffff;
+            --bg: #000000;
+            --sidebar-bg: #000000;
+            --stage-bg: #0d0d0d;
+            --border: #262626;
+            --stage-border: #262626;
+            --text: #ffffff;
+            --muted: #999999;
+            --nav-hover-bg: #141414;
+            --monitor-bg: rgba(13, 13, 13, 0.82);
+            --monitor-border: rgba(255, 255, 255, 0.08);
+            --monitor-shadow: rgba(0, 0, 0, 0.4);
+            --divider: rgba(255, 255, 255, 0.15);
+            --scrollbar: #3a3a3a;
+            --scrollbar-hover: #555555;
+            --author-name: #ffffff;
+            --social-icon: #666666;
+        }
+
+        /* 全局纯黑画布与文字选区 */
+        html,
+        body {
+            background: #000000;
+        }
+        ::selection {
+            background: #ffffff;
+            color: #000000;
+        }
+
+        /* 锐利直角：舞台与导航去圆角，呈现 Bugatti 的austere感 */
+        .stage {
+            border-radius: 0;
+            border-color: #262626;
+        }
+        .nav-item,
+        .nav-fold-toggle {
+            border-radius: 0;
+        }
+
+        /* 导航文字：Bugatti nav-link —— 大写、宽字距、常规字重 */
+        .nav-text {
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: 400;
+            font-size: 12px;
+        }
+
+        /* 激活态：白底黑字反相（修正原本 accent=白 时的「白底白字」不可见问题） */
+        .nav-item.active,
+        html.theme-dark .nav-item.active,
+        body.theme-dark .nav-item.active {
+            background: #ffffff;
+            color: #000000;
+        }
+        .nav-item.active svg,
+        html.theme-dark .nav-item.active svg,
+        body.theme-dark .nav-item.active svg {
+            color: #000000;
+        }
+
+        /* 监视器标签：等宽宽字距，呼应 Bugatti monospace caption */
+        .label-nano {
+            letter-spacing: 2px;
+        }
+    </style>
 </head>
 
 <body>
