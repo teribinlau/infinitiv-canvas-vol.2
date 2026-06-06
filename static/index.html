@@ -2469,6 +2469,10 @@
         window.rollbackProjectUpdate = rollbackProjectUpdate;
 
         async function checkForUpdates(manual = false) {
+            // 已禁用更新检测：本项目由 git 维护，不再从远程仓库拉取覆盖本地修改
+            const _ub = document.getElementById('update-now-btn');
+            if(_ub) _ub.classList.remove('show');
+            return;
             const isEn = window.StudioI18n?.lang?.() === 'en';
             const badge = document.getElementById('project-version-badge');
             if(manual && badge) badge.classList.add('checking');

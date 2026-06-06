@@ -1882,6 +1882,8 @@ def stage_update_from_source(source: str, staging_root: str) -> Tuple[List[str],
 
 @app.post("/api/update-from-github")
 def update_from_github(req: UpdateRequest = UpdateRequest()):
+    # 已禁用一键更新：本项目由 git 维护，远程覆盖会抹掉本地修改，故在后端硬拒绝。
+    raise HTTPException(status_code=403, detail="一键更新已禁用：本项目由 git 维护，请用 git 同步代码。")
     if not UPDATE_LOCK.acquire(blocking=False):
         raise HTTPException(status_code=409, detail="正在更新中，请稍后再试")
     staging_root = ""
