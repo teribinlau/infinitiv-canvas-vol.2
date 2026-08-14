@@ -276,6 +276,50 @@ numbers, text, letters, labels, frame numbers, corner marks, annotations, captio
 
 ---
 
+## 预设11：极简黑白 Logo 方案设计
+
+### 适用场景
+极简黑白 Logo 方案探索板，适合品牌、产品、空间、活动、机构、文化概念或创意项目，一次围绕同一主题发散 24 个标志方向
+
+### 正向提示词
+```
+生成一张极简黑白 Logo 方案探索板，主题为 [主题]，适合任意品牌、产品、空间、活动、机构、文化概念或创意项目。整体纯白背景，无边框、无阴影、无样机、无场景装饰，像国际顶级平面设计工作室输出的 logo archive / minimalist identity exploration board。主体采用 4 列 × 6 行松散网格排布，共 24 个围绕同一主题发散的 Logo 方案，每个独立居中、留白充足，整体干净克制高级；所有 Logo 以黑色图形、白色负形、几何块面、极简线条、实验字体为主，可有少量极轻微灰度渐变或小型 TM / ® 标记，但整体保持黑白极简。创作前深度理解 [主题]，不做表面图标模仿，从功能属性、使用场景、情绪气质、文化语境、结构特征、运动关系、象征隐喻、品牌性格、用户感受中提炼视觉核心再转译为极简图形语言，每个 Logo 像“概念被高度压缩后的符号”，简洁但有思想、抽象但可识别、少元素但高记忆点。24 个方案方向各不相同但风格统一，可用：抽象吉祥物、几何徽章、负形隐喻、字母融合、圆形符号、方形模块、弧形文字、实验字标、构成主义拼贴、线性符号、粗黑块面、图文组合、视觉双关、重复节奏、方向错位、符号系统、极简人脸、抽象动物、产品轮廓转译、空间结构转译、功能动作转译、情绪图形化、品牌首字母变形、标语型字标。所有品牌名为英文，简短现代易记，3–10 个字母，字体可用 Helvetica、Futura、DIN、Akzidenz-Grotesk、高对比衬线体、圆润无衬线体、极粗黑体、窄高体、宽扁体、实验变形字体，文字清晰可读、避免乱码错字。图形参考 Paul Rand 视觉双关、Otl Aicher 符号系统、Chermayeff & Geismar 高度概括、Lance Wyman 几何识别、Josef Müller-Brockmann 理性秩序，但不直接模仿现成作品。最终呈现真实品牌提案感：黑白强对比、边缘清晰、构成精准、负形巧妙、图形克制、识别度强。
+```
+
+### 负向提示词
+```
+complex illustration, detailed illustration, cartoon, childish doodle, 3D render, material lighting, realistic shadows, colorful, color decoration, background texture, gradient mesh, glossy, bevel, emboss, drop shadow, photographic, photo, mockup, device mockup, scene props, web navigation, UI chrome, footer numbers, page numbers, index, copyright text, small print, watermark, signature, garbled text, misspelled words, gibberish letters, meaningless characters, low recognition, cluttered, busy composition, literal object icon
+```
+
+### 平台参数建议
+- **Midjourney**: `--ar 3:4 --style raw --s 50`
+- **即梦/可灵**: 纯白背景、黑白极简，把 [主题] 换成你的品牌/概念名
+- **Flux**: 低 CFG（3–4）保持极简，避免堆细节
+
+---
+
+## 预设12：品牌包装视觉系统展示图
+
+### 适用场景
+一整套品牌包装物料陈列展示图（手提袋、盒、罐、贴纸、标签、卡片等），形成完整品牌家族感，用于品牌 VI / 包装设计提案与视觉系统展示
+
+### 正向提示词
+```
+一张品牌包装视觉系统展示图。画面中陈列一整套围绕 [品牌主题] 展开的包装物料，数量丰富但有秩序，可包含：手提袋、主包装盒、立袋、纸袋、小方盒、长盒、圆罐、瓶器、贴纸、标签卡、宣传单、说明卡、色卡、小样包装、透明包装或其他与 [品类属性] 相关的容器；物料大小穿插、错落陈列，形成完整品牌家族感。整套系统统一使用 [主色方案] 与 [辅助色方案]，搭配大面积留白、少量强调色块、清晰层级排版；品牌 Logo 为 [Logo风格描述]；图形系统围绕 [核心图形类型] 展开，可延展为线稿插画、符号、抽象图形、角色、标签识别元素等；包装上可加入少量中文 / 英文小字说明、信息模块、图标、规格信息，增强真实包装感。构图上方放置较大主视觉包装，中部安排核心盒型 / 袋型 / 瓶器，底部排列小包装、贴纸、标签或补充物料；整体留白充足但画面饱满，主次分明，统一透视关系，所有物品具有真实厚度、折痕、开口、边缘与材质差异。超高清，真实产品摄影质感，细节丰富，边缘清晰，排版专业，品牌识别度高，整体年轻、干净、精致、有高级设计感。
+```
+
+### 负向提示词
+```
+cluttered background, busy scene, complex environment, messy backdrop, people, human figures, hands, cheap e-commerce style, low-end product shot, over-cartoonish, childish, overly retro, vintage grunge, heavy dark tones, dull muddy colors, irrelevant decoration, random props, garbled text, misspelled words, gibberish letters, meaningless characters, blurry, low quality, distorted packaging, melted shapes
+```
+
+### 平台参数建议
+- **Midjourney**: `--ar 4:3 --style raw --s 100`
+- **即梦/可灵**: 真实产品摄影、纯净背景，把 [品牌主题]、[品类属性] 等占位换成你的品牌信息
+- **Flux**: 中等 CFG（4–5），强调产品摄影质感与排版清晰度
+
+---
+
 ## 预设使用纪律
 
 1. **一致性三重锚定**：每套预设必须包含 `consistent` / `identical` / `uniform` 至少两个词

@@ -6531,6 +6531,7 @@ function defaultCanvasPromptTemplateGroups(){
         {id:'storyboard', name:tr('smart.tplCatStoryboard')},
         {id:'character', name:tr('smart.tplCatCharacter')},
         {id:'product', name:tr('smart.tplCatProduct')},
+        {id:'design', name:tr('smart.tplCatDesign')},
         {id:'lighting', name:tr('smart.tplCatLighting')},
         {id:'mine', name:tr('smart.tplCatMine')}
     ];

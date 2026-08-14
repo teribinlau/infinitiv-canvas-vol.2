@@ -1326,6 +1326,14 @@ def static_html_response(filename: str):
 STATIC_PROMPT_TEMPLATE_MD = os.path.join(STATIC_DIR, "system-prompts", "infinite-canvas-prompt-templates.md")
 PROMPT_TEMPLATE_PATHS = [STATIC_PROMPT_TEMPLATE_MD]
 PROMPT_TEMPLATE_EN = {
+    "极简黑白 Logo 方案设计": {
+        "name": "Minimalist B&W Logo Exploration",
+        "scene": "A minimalist black-and-white logo exploration board for brands, products, events, institutions, or concepts — 24 logo directions around one theme.",
+    },
+    "品牌包装视觉系统展示图": {
+        "name": "Brand Packaging System Showcase",
+        "scene": "A full brand packaging family laid out as a showcase — bags, boxes, jars, labels, stickers — for VI / packaging design proposals.",
+    },
     "多机位九宫格": {
         "name": "9-Angle Multi-Camera Grid",
         "scene": "Show the same subject or scene from 9 camera angles for character turnarounds, product views, or space scouting.",
@@ -1384,6 +1392,8 @@ def prompt_template_category(name: str, scene: str) -> str:
         return "character"
     if any(k in name for k in ["产品", "电商", "工业"]):
         return "product"
+    if any(k in text for k in ["Logo", "logo", "LOGO", "标志", "品牌", "平面设计", "海报", "字体", "字标", "VI", "视觉识别", "排版"]):
+        return "design"
     return "storyboard"
 
 def extract_prompt_template_section(block: str, title: str) -> str:
@@ -4391,6 +4401,7 @@ def defaultPromptTemplateCategories():
         {"id": "storyboard", "name": "分镜"},
         {"id": "character", "name": "角色"},
         {"id": "product", "name": "产品"},
+        {"id": "design", "name": "设计"},
         {"id": "lighting", "name": "光影"},
         {"id": "custom", "name": "我的"},
     ]
@@ -4447,6 +4458,15 @@ def normalize_prompt_libraries(data):
                 continue
             seen_items.add(item_id)
             items.append(item)
+        if is_system:
+            # 补充 md 中新增的内置模板（持久化快照里没有的，如新加的预设），不覆盖用户对已有内置项的编辑
+            existing_item_ids = {str(it.get("id") or "") for it in (raw.get("items") if isinstance(raw.get("items"), list) else []) if isinstance(it, dict)}
+            for tpl in builtin_prompt_templates():
+                tid = str(tpl.get("id") or "")
+                if tid and tid not in existing_item_ids and tid not in seen_items:
+                    builtin_item = normalize_prompt_library_item(tpl)
+                    seen_items.add(builtin_item.get("id") or tid)
+                    items.append(builtin_item)
         default_name = "系统提示词库" if is_system else "提示词库"
         raw_categories = raw.get("categories") if isinstance(raw.get("categories"), list) else []
         if not is_system:

@@ -16,6 +16,7 @@
         "smart.tplCatStoryboard": { zh: "分镜", en: "Storyboard" },
         "smart.tplCatCharacter": { zh: "角色", en: "Character" },
         "smart.tplCatProduct": { zh: "产品", en: "Product" },
+        "smart.tplCatDesign": { zh: "设计", en: "Design" },
         "smart.tplCatLighting": { zh: "光影", en: "Lighting" },
         "smart.tplCatMine": { zh: "我的", en: "Mine" },
         "smart.tplBuiltin": { zh: "内置", en: "Built-in" },
