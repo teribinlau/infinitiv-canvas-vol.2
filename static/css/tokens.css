@@ -1,0 +1,141 @@
+/* ============================================================
+   Infinite-Canvas / ilililab — 统一设计 token（基础层）
+   ------------------------------------------------------------
+   颜色对齐 canvas.css 现有体系（浅色 + 深色），确保引入后视觉不变；
+   新增 spacing / radius / 字号 / 阴影 / 动效 token 供后续逐步迁移硬编码。
+
+   引入规则：本文件应在所有其他 CSS / inline <style> 之前 link。
+   页面若已有自己的 :root 颜色定义，会就近覆盖这里的颜色（视觉不变）；
+   而本文件新增的 --space-* / --radius-* / --text-* 等会全局可用并兜底。
+
+   标准断点（供 @media 统一引用，CSS 变量不能直接用于 @media，此处为团队约定）：
+     sm 640px · md 768px · lg 1024px · xl 1280px · 2xl 1536px
+   ============================================================ */
+
+:root {
+  /* ---------- 颜色 / 表面（对齐 canvas.css）---------- */
+  --page: #f8fafc;
+  --grid: #d9e1ea;
+  --panel: rgba(255, 255, 255, .92);
+  --card: rgba(255, 255, 255, .96);
+  --card-solid: #fff;
+  --soft: #f8fafc;
+  --soft-2: #f1f5f9;
+  --line: #e8edf3;
+  --line-2: #cbd5e1;
+  --text: #111827;
+  --muted: #64748b;
+  --faint: #94a3b8;
+  --shadow: rgba(15, 23, 42, .08);
+  --strong: #111827;
+  --strong-text: #fff;
+  /* 常见同义别名（部分页面用 --bg / --accent / --border） */
+  --bg: #f8fafc;
+  --accent: #111827;
+  --border: #e8edf3;
+
+  /* ---------- 语义状态色 ---------- */
+  --success: #16a34a;
+  --warning: #d97706;
+  --danger: #dc2626;
+  --danger-soft: #fee2e2;
+  --info: #2563eb;
+
+  /* ---------- 间距 scale（4px 基准）---------- */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* ---------- 圆角 ---------- */
+  --radius-xs: 4px;
+  --radius-sm: 7px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-full: 999px;
+
+  /* ---------- 字号 scale ---------- */
+  --text-2xs: 9px;
+  --text-xs: 10.5px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 30px;
+  --leading-tight: 1.2;
+  --leading-normal: 1.5;
+
+  /* ---------- 字体栈 ---------- */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* ---------- 阴影 / 高度 ---------- */
+  --elev-1: 0 1px 3px rgba(15, 23, 42, .06);
+  --elev-2: 0 4px 12px rgba(15, 23, 42, .10);
+  --elev-3: 0 16px 44px rgba(15, 23, 42, .08);
+  --elev-4: 0 24px 60px rgba(15, 23, 42, .16);
+
+  /* ---------- 动效 ---------- */
+  --ease: cubic-bezier(.4, 0, .2, 1);
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+  --ease-in-out: cubic-bezier(.65, 0, .35, 1);
+  --easing: cubic-bezier(.4, 0, .2, 1);
+  --dur-fast: .12s;
+  --dur-base: .18s;
+  --dur-slow: .32s;
+}
+
+/* ---------- 深色模式（覆盖两套现有机制：.theme-dark 与 .studio-theme-dark）---------- */
+.theme-dark,
+.studio-theme-dark,
+.studio-theme-dark body {
+  --page: #0b1020;
+  --grid: rgba(148, 163, 184, .16);
+  --panel: rgba(17, 24, 39, .9);
+  --card: rgba(15, 23, 42, .96);
+  --card-solid: #111827;
+  --soft: #1e293b;
+  --soft-2: #263449;
+  --line: #334155;
+  --line-2: #64748b;
+  --text: #f8fafc;
+  --muted: #cbd5e1;
+  --faint: #94a3b8;
+  --shadow: rgba(0, 0, 0, .28);
+  --strong: #f8fafc;
+  --strong-text: #0f172a;
+  --bg: #0b1020;
+  --accent: #f8fafc;
+  --border: #334155;
+
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, .14);
+  --info: #60a5fa;
+
+  --elev-1: 0 1px 3px rgba(0, 0, 0, .3);
+  --elev-2: 0 4px 12px rgba(0, 0, 0, .4);
+  --elev-3: 0 16px 44px rgba(0, 0, 0, .28);
+  --elev-4: 0 24px 60px rgba(0, 0, 0, .5);
+}
+
+/* 尊重系统「减少动态效果」偏好（全局兜底，组件可覆盖） */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0s;
+    --dur-base: 0s;
+    --dur-slow: 0s;
+  }
+}

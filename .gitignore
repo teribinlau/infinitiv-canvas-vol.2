@@ -12,6 +12,10 @@ assets/
 output/
 history.json
 
+# 本地桌面启动器（仅本机使用，不入库）
+启动无限画布.bat
+static/images/logo.ico
+
 # 系统
 .DS_Store
 Thumbs.db
